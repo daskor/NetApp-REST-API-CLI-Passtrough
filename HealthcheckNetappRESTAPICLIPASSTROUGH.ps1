@@ -25,10 +25,10 @@ $AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
 Import-Module PoShKeePass -Force
 
 #Output script, change path to what you prefer. Also assigns date to the file
-$OutPutFile = "C:\Proact\Statusmail historik\2024\$(get-date -f yyyy-MM-dd)_log.txt"
+$OutPutFile = "C:\PATH\$(get-date -f yyyy-MM-dd)_log.txt"
 $i = 1
 while (Test-Path $OutPutFile) {
-    $OutPutFile =  "C:\Proact\Statusmail historik\2024\$(get-date -f yyyy-MM-dd)_log$i.txt"
+    $OutPutFile =  "C:\PATH\$(get-date -f yyyy-MM-dd)_log$i.txt"
     $i++
 }
 
@@ -44,7 +44,7 @@ function Write-ToConsoleAndFile {
 }
 
 #Add cluster IP/DNS (DNS prefered,more readable output) that you want the script to check, add them in lines one line for each cluster.
-$Cluster_List = Get-Content "C:\Proact\clusterlist.txt"
+$Cluster_List = Get-Content "C:\***\clusterlist.txt"
 
 
 # Store the Entries into a variable
@@ -104,7 +104,7 @@ ForEach ($Cluster in $Cluster_List) {
         return # Exit the script if no credentials were found for a cluster in the list
     }#>
 
-    # Get today's date and version of ONTAP
+  Get today's date and version of ONTAP
     $Date = Get-Date -format yyyy.MM.dd.hh.mm
     Write-ToConsoleAndFile -text "TimeStamp:",$Date -file $OutputFile
     Write-ToConsoleAndFile -text "============= Ontap System Info ==============" -file $OutputFile
@@ -137,7 +137,7 @@ ForEach ($Cluster in $Cluster_List) {
         }
     }
     #AutoSupport state based on the findings
-    $AutosupportState = if ($AnyDisabledAutosupport) { "disable" } else { "enabled" }
+    $AutosupportState = if ($AnyDisabledAutosupport) { "Disable" } else { "Enable" }
 
     $NodeInfo = @()
 
@@ -151,7 +151,7 @@ ForEach ($Cluster in $Cluster_List) {
         # Retrieve the version for the current node
         $NodeVersion = $VersionMap[$Node.node]
 
-    foreach ($Node in $NodeTable.records) {
+        # Create a custom object for each node
         $NodeObject = [PSCustomObject]@{
             Node = $Node.node
             Location = $Node.location
@@ -162,8 +162,9 @@ ForEach ($Cluster in $Cluster_List) {
             Health = $Node.health
             Eligibility = $Node.eligibility
             AutosupportState = $AutosupportState
-            }
         }
+
+        # Add the node object to the NodeInfo array
         $NodeInfo += $NodeObject
     }
 
@@ -175,6 +176,7 @@ ForEach ($Cluster in $Cluster_List) {
 
     # Output the formatted information
     Write-ToConsoleAndFile -text "$FormattedOutput" -file $OutputFile
+
 
 
         Write-ToConsoleAndFile -text "============= Aggregate information ==============" -file $OutputFile
@@ -232,10 +234,10 @@ ForEach ($Cluster in $Cluster_List) {
     }
 
     # Convert to table format and output to console
-    $AggregateInfo | Format-Table -AutoSize | Out-Host
+    $AggregateInfo | Format-Table -Property Node, Aggregate, TotalSize, Available, Used, Usedsize, Disks, Volumes, RaidType -AutoSize | Out-Host
 
     # Convert to table format, convert to string, and append to file
-    $AggregateSummary = $AggregateInfo | Format-Table -AutoSize | Out-String
+    $AggregateSummary = $AggregateInfo | Format-Table -Property Node, Aggregate, TotalSize, Available, Used, Usedsize, Disks, Volumes, RaidType -AutoSize | Out-String
     Write-ToConsoleAndFile -text "$AggregateSummary" -file $OutputFile
 
     Write-ToConsoleAndFile -text "============= Overall Health Check ==============`r`n" -file $OutputFile
@@ -285,7 +287,7 @@ ForEach ($Cluster in $Cluster_List) {
     Write-ToConsoleAndFile -text "$RingHealthSummary `r`n" -file $OutputFile
 
     # Chassis health check
-    Write-Host "============= Chassis health check ==============`r`n" # Sorting in categories make the terminal easier to look at
+    Write-Host "============= Chassis FRU health check ==============`r`n" # Sorting in categories make the terminal easier to look at
 
     # Define the fields to retrieve for each chassis
     $ChassisFieldList = @(
@@ -396,11 +398,11 @@ ForEach ($Cluster in $Cluster_List) {
     foreach ($Record in $NetworkStatus.records) {
         Write-Host "Checking Network Interface: $($Record.curr_port) on Node: $($Record.curr_node)"
 
-        # Skip if vserver name contains anything in field or just comment to skip
-        #if ($Record.vserver -like "*NAMNHÄR*") {
-         #   Write-Host "Skipping DR vserver: $($Record.vserver)"
-          #  continue
-        #}
+        # Skip if vserver name contains "_DR" only as a workaround for Tranås..
+        if ($Record.vserver -like "*_DR*") {
+            Write-Host "Skipping DR vserver: $($Record.vserver)"
+            continue
+        }
 
         # Check conditions only if broadcast_domain is filled or null
         if ($Record.broadcast_domain) {
@@ -441,11 +443,11 @@ ForEach ($Cluster in $Cluster_List) {
         # Debug output before potentially skipping the record
         Write-Host "Evaluating subsystem: $($Record.subsystem) with health status: $($Record.health)"
 
-        # Skip specific subsystems based on name, workaround if needed
-        #if ($Record.subsystem -like "*sas_connect*") {
-         #   Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
-          #  continue
-        #}
+        # Skip specific subsystems based on name
+        if ($Record.subsystem -like "*sas_connect*") {
+            Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
+            continue
+        }
 
         if ($Record.health -ne "ok") {
             $SubsystemHealthOk = $false
@@ -468,13 +470,13 @@ ForEach ($Cluster in $Cluster_List) {
         # Output summary for subsystem health
         Write-ToConsoleAndFile -text "$SubsystemSummary`r`n" -file $OutputFile
 
-    Write-ToConsoleAndFile -text "============= Volumes Above 88% ==============`r`n" -file $OutputFile
+    Write-ToConsoleAndFile -text "============= Volumes Above 80% ==============`r`n" -file $OutputFile
 
     $GetVolumes = "https://$Cluster/api/private/cli/volume?fields=vserver,volume,aggregate,available,total,percent-used,autosize-mode,autosize-grow-threshold-percent,autosize-shrink-threshold-percent,&pretty=false"
     $VolumeTable = Invoke-RestMethod $GetVolumes -Credential $CredObject
 
     $FilteredVolumes = $VolumeTable.records | Where-Object {
-        $AboveThreshold = $_.'percent_used' -gt 88
+        $AboveThreshold = $_.'percent_used' -gt 80
         $AutosizeOff = $_.autosize_mode -eq "off"
         $GrowShrink = $_.autosize_mode -eq 'grow_shrink'
         $GrowThresholdPopulated = $_.autosize_grow_threshold_percent -ne $null
@@ -489,11 +491,33 @@ ForEach ($Cluster in $Cluster_List) {
     }
 
     if ($FilteredVolumes.Count -eq 0) {
-        Write-ToConsoleAndFile -text "No volumes are above 88% `r`n" -file $OutputFile
+        Write-ToConsoleAndFile -text "No volumes are above 80% `r`n" -file $OutputFile
     } else {
-        Write-ToConsoleAndFile -text "Volumes above 88% without autogrow enabled, correction is needed `r`n" -file $OutputFile
+        Write-ToConsoleAndFile -text "Volumes above 80% without autogrow enabled, correction is needed `r`n" -file $OutputFile
 
         $VolumeInfo = @()
+        
+        #Function to ConvertTo-ReadableSize
+        function ConvertTo-ReadableSize {
+        param(
+            [Parameter(Mandatory=$true)]
+            [int64]$SizeInBytes
+        )
+
+        $sizes = @("Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+        $order = 0
+
+        while ($SizeInBytes -ge 1024 -and $order -lt $sizes.Count) {
+            $order++
+            $SizeInBytes = $SizeInBytes / 1024
+        }
+
+        "{0:N2} {1}" -f $SizeInBytes, $sizes[$order]
+    }
+
+    $bytes = 1500000
+    $readableSize = ConvertTo-ReadableSize -SizeInBytes $bytes
+
 
     foreach ($Volume in $FilteredVolumes) {
         $AvailableSize = ConvertTo-ReadableSize $Volume.available
@@ -522,16 +546,19 @@ ForEach ($Cluster in $Cluster_List) {
         # Create a custom object for each volume
         $VolumeObject = [PSCustomObject]@{
             Volume = $Volume.volume
+            Total = $TotalSize
             Used = $UsedPercent
             Available = $AvailableSize
             Dedupe = $Dedupe
             Vserver = $Volume.vserver
+            Autogrowstatus = $AutosizeMode
+
         }
 
         $VolumeInfo += $VolumeObject
     }
         # Output formatted records
-        $VolumeInfo | Format-Table -Property Volume, Used, Available, Dedupe, Vserver -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
+        $VolumeInfo | Format-Table -Property Volume, Total, Used, Available, Dedupe, Vserver, Autogrowstatus -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
     }
 
     # Checking for inodes above 78% Ontap starts giving warnings at about 80%
@@ -552,7 +579,7 @@ ForEach ($Cluster in $Cluster_List) {
         Write-ToConsoleAndFile -text "No volumes are above 78% file usage`r`n 
         "-file $OutputFile
     } else {
-        Write-ToConsoleAndFile -text "Volumes above 78% file usage, correction is needed`r`n" -file $OutputFile
+        Write-ToConsoleAndFile -text "Volumes above 78% file usage, correction is needed `r`n" -file $OutputFile
 
         $FileUsageInfo = @()
 
@@ -566,13 +593,14 @@ ForEach ($Cluster in $Cluster_List) {
                 FilesUsed = $Volume.'files_used'
                 FilesUsedPercent = $FilesUsedPercentFormatted
                 Vserver = $Volume.vserver
+                Node = $Volume.node
             }
 
             $FileUsageInfo += $VolumeFileUsageObject
         }
 
         # Output formatted records for inodes
-        $FileUsageInfo | Format-Table -Property Volume, FilesMax, FilesUsed, FilesUsedPercent, Vserver -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
+        $FileUsageInfo | Format-Table -Property node, Volume, FilesMax, FilesUsed, FilesUsedPercent, Vserver -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
     }
 
     # Checking for SnapMirror problems
@@ -682,7 +710,7 @@ ForEach ($Cluster in $Cluster_List) {
     Write-Host "Fetched SnapMirror Data: $($SnapmirrorData.records.Count) entries"
     Write-ToConsoleAndFile -text "SnapMirror Health check OK.`r`n" -file $OutPutFile
 
-   # Snapshot check problemsm,  comment out if not necessery to track
+   # Snapshot check problems
     Write-ToConsoleAndFile -text "============= Snapshot problems ==============`r`n" -file $OutPutFile
 
     # Fields to retrieve
@@ -708,6 +736,7 @@ ForEach ($Cluster in $Cluster_List) {
 
     # Keywords to track
     $SnapshotKeywords = @(
+    "Veeam", 
     "Anti_ransomware_backup", 
     "ransomware"
     "anti-ransomware-main-backup"
@@ -726,7 +755,7 @@ ForEach ($Cluster in $Cluster_List) {
     foreach ($SnapshotRecord in $SnapshotTable.records) {
 
     # Exception for specific nodes if needed
-    if ($SnapshotRecord.node -eq "cluster1" -or $SnapshotRecord.node -eq "cluster2") {
+    if ($SnapshotRecord.node -eq "cluster4-01" -or $SnapshotRecord.node -eq "cluster4-02") {
         # Log and continue to the next record without processing this one
         #Debug
         #Write-Host "Ignoring snapshot from node $($SnapshotRecord.node)."
@@ -762,7 +791,6 @@ ForEach ($Cluster in $Cluster_List) {
         # Output JSON result and the count of matching snapshots
         Write-ToConsoleAndFile -text "Filtered Snapshots JSON:`r`n$SnapshotsJson`r`nTotal Filtered Snapshots Count: $SnapshotsMatchCount" -file $OutputFile
     }
-
 
 
     # Checking for ransomware warnings
@@ -827,7 +855,22 @@ ForEach ($Cluster in $Cluster_List) {
 
     # Checking for relevant EMS messages
     Write-ToConsoleAndFile -text "============= !!! Important EMS warning messages to txt log !!! ==============`r`n " -file $OutPutFile
-    Write-ToConsoleAndFile -text "See console for more good-to-know EMS messages`r`n " -file $OutPutFile
+    Write-ToConsoleAndFile -text "See console for more good-to-know EMS messages (Also only the last 48 hours gets printed)`r`n " -file $OutPutFile
+
+
+    # Define function to check if a record's timestamp is within the specified time frame
+    function IsRecordWithinTimeFrame {
+        param (
+            [string]$RecordTime,
+            [int]$DaysBack = 0
+        )
+    
+        $ParsedRecordTime = [datetime]::ParseExact($RecordTime, "yyyy-MM-ddTHH:mm:sszzz", $null)
+        $StartTime = (Get-Date).Date.AddDays(-$DaysBack)
+        $EndTime = (Get-Date).Date.AddDays(1).AddSeconds(-1)
+    
+        return $ParsedRecordTime -ge $StartTime -and $ParsedRecordTime -le $EndTime
+    }
 
     # Keywords to ignore in "alert" severity records
     $IgnoreKeywordsForAlert = @(
@@ -865,7 +908,8 @@ ForEach ($Cluster in $Cluster_List) {
     $PriorityKeywords = @(
         "ransomware",
         "offline"
-        "anti-ransomware"
+        "anti-ransomware",
+        "emergency"
     )
 
     $EventLogFields = @(
@@ -890,7 +934,7 @@ ForEach ($Cluster in $Cluster_List) {
             [PSCustomObject]$Record,
             [string[]]$PriorityKeywords
         )
-    
+        
         $FieldsToCheck = @('node', 'seqnum', 'time', 'source', 'message_name', 'event', 'action')
         foreach ($Field in $FieldsToCheck) {
             $FieldValue = [string]$Record.$Field
@@ -922,13 +966,19 @@ ForEach ($Cluster in $Cluster_List) {
         return $False
     }
 
-    # Record processing
+    # Processing records
     $PriorityRecords = @()
     $OtherRecords = @()
 
     foreach ($Record in $EventLogTable.records) {
-        $SeverityMatch = $Record.severity -eq "alert" -or $Record.severity -eq "error"
-        if ($SeverityMatch) {
+
+        # Adjust DaysBack to a higher number to get more EMS messages to the console/txt log, 0 is default value will only show message from 00:00:00 this day
+        $TimeFrameMatch = IsRecordWithinTimeFrame -RecordTime $Record.time -DaysBack 1
+    
+        # Severity match set records
+        $SeverityMatch = $Record.severity -eq "alert" -or $Record.severity -eq "error" -or $Record.severity -eq "emergency"
+    
+        if ($SeverityMatch -and $TimeFrameMatch) {
             $ContainsPriorityKeyword = Contains-PriorityKeyword -Record $Record -PriorityKeywords $PriorityKeywords
             $FilterIgnore = Should-IgnoreRecord -Record $Record -IgnoreKeywords ($IgnoreKeywordsForAlert + $IgnoreKeywordsForError)
         
@@ -979,7 +1029,7 @@ ForEach ($Cluster in $Cluster_List) {
 
 }
 
-#//Clears all variables before ending script, shutting down powershell will  also clear memory
+#//Clears all variables before ending script, shutting down powershell will also clear memory
 Get-Variable | Where-Object { $_.Name -ne '^' } | Remove-Variable -ErrorAction SilentlyContinue -Force
 
 
