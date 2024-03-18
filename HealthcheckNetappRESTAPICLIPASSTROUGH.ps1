@@ -443,11 +443,11 @@ ForEach ($Cluster in $Cluster_List) {
         # Debug output before potentially skipping the record
         Write-Host "Evaluating subsystem: $($Record.subsystem) with health status: $($Record.health)"
 
-        # Skip specific subsystems based on name
-        if ($Record.subsystem -like "*sas_connect*") {
-            Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
-            continue
-        }
+        # Skip specific subsystems based on name, use for trouble shooting or debug
+        #if ($Record.subsystem -like "*sas_connect*") {
+        #    Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
+        #    continue
+        #}
 
         if ($Record.health -ne "ok") {
             $SubsystemHealthOk = $false
