@@ -398,13 +398,13 @@ ForEach ($Cluster in $Cluster_List) {
     foreach ($Record in $NetworkStatus.records) {
         Write-Host "Checking Network Interface: $($Record.curr_port) on Node: $($Record.curr_node)"
 
-        # Skip if vserver name contains "_DR" only as a workaround for Tranås..
-        if ($Record.vserver -like "*_DR*") {
-            Write-Host "Skipping DR vserver: $($Record.vserver)"
-            continue
-        }
+        # Skip if vserver name contains "_DR" for example, use as work around or troubleshooting.
+        #if ($Record.vserver -like "*_DR*") {
+        #   Write-Host "Skipping DR vserver: $($Record.vserver)"
+        #  continue
+        #}
 
-        # Check conditions only if broadcast_domain is filled or null
+        # Check conditions only if broadcast_domain is filled or null, this is to check if network is in use or not. Most likely used if broadcast domain is filled.
         if ($Record.broadcast_domain) {
             Write-Host "Checking Broadcast Domain: $($Record.broadcast_domain)"
             if ($Record.status_oper -ne "up" -or $Record.is_home -ne $true -or $Record.status_admin -ne "up") {
