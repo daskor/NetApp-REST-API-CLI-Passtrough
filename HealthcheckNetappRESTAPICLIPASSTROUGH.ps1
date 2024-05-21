@@ -25,10 +25,10 @@ $AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
 Import-Module PoShKeePass -Force
 
 #Output script, change path to what you prefer. Also assigns date to the file
-$OutPutFile = "C:\Proact\Statusmail historik\2024\Netapp-$(get-date -f yyyy-MM-dd)_log.txt"
+$OutPutFile = "C:\****\logg\2024\Netapp-$(get-date -f yyyy-MM-dd)_log.txt"
 $i = 1
 while (Test-Path $OutPutFile) {
-    $OutPutFile =  "C:\Proact\Statusmail historik\2024\Netapp-$(get-date -f yyyy-MM-dd)_log$i.txt"
+    $OutPutFile =  "C:\****\logg\2024\Netapp-$(get-date -f yyyy-MM-dd)_log$i.txt"
     $i++
 }
 
@@ -44,14 +44,14 @@ function Write-ToConsoleAndFile {
 }
 
 #Add cluster IP/DNS (DNS prefered,more readable output) that you want the script to check, add them in lines one line for each cluster.
-$Cluster_List = Get-Content "C:\Proact\clusterlist.txt"
+$Cluster_List = Get-Content "C:\****"\clusterlist.txt"
 
 
 # Store the Entries into a variable
-$KpEntries = Get-KeePassEntry -KeePassEntryGroupPath 'Database' -DatabaseProfileName Tranås
+$KpEntries = Get-KeePassEntry -KeePassEntryGroupPath 'Database' -DatabaseProfileName ****
 
 # Define the entry titles from keepass for which you want to retrieve the passwords 
-$EntryTitles = @("172.16.51.11", "172.16.51.21", "172.16.51.76", "172.16.51.12", "172.16.51.46")
+$EntryTitles = @("****"", "****"", "****"", "****", "****")
 
 # Empty variable to hold the passwords
 $Passwords = @()
@@ -80,19 +80,19 @@ ForEach ($Cluster in $Cluster_List) {
 
         $CredObject = $null
 
-        If ($Cluster -imatch "172.16.51.11") {
+        If ($Cluster -imatch "****"") {
             $CredObject = $Credential1
         }
-        elseif ($Cluster -imatch "172.16.51.21") {
+        elseif ($Cluster -imatch "****"") {
             $CredObject = $Credential2
         }
-        elseif ($Cluster -imatch "172.16.51.76") {
+        elseif ($Cluster -imatch "****"") {
             $CredObject = $Credential3
         }
-        elseif ($Cluster -imatch "172.16.51.12") {
+        elseif ($Cluster -imatch "****"") {
             $CredObject = $Credential4
         }
-        elseif ($Cluster -imatch "172.16.51.46") {
+        elseif ($Cluster -imatch "****"") {
             $CredObject = $Credential5
         }
           #DEBUG LOGIN
@@ -402,7 +402,7 @@ ForEach ($Cluster in $Cluster_List) {
         # Debug output before potentially skipping the record
         Write-Host "Evaluating subsystem: $($Record.subsystem) with health status: $($Record.health)"
 
-        # Skip specific subsystems based on name, workaround for Tranås internal disk issue..
+        # Skip specific subsystems based on name, workaround for **** internal disk issue..
         if ($Record.subsystem -like "*sas_connect*") {
             Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
             continue
@@ -519,12 +519,12 @@ ForEach ($Cluster in $Cluster_List) {
     $NetworkHealthOk = $true
     $ProblemRecords = @()
 
-    # Define nodes to ignore when status_oper is 'down'
+    # Define MetroCluster-nodes (or nodes) to ignore when status_oper is 'down'
     $IgnoreNodes = @(
-        "nmc1-01",
-        "nmc1-02",
-        "nmc2-01",
-        "nmc2-02"
+        "nmc1-01etc",
+        "nmc1-02etc",
+        "nmc2-01etc",
+        "nmc2-02etc"
     )
 
     # Go over each network record and check conditions
