@@ -25,10 +25,10 @@ $AllProtocols = [System.Net.SecurityProtocolType]'Ssl3,Tls,Tls11,Tls12'
 Import-Module PoShKeePass -Force
 
 #Output script, change path to what you prefer. Also assigns date to the file
-$OutPutFile = "C:\PATH\$(get-date -f yyyy-MM-dd)_log.txt"
+$OutPutFile = "C:\Proact\Statusmail historik\2024\Netapp-$(get-date -f yyyy-MM-dd)_log.txt"
 $i = 1
 while (Test-Path $OutPutFile) {
-    $OutPutFile =  "C:\PATH\$(get-date -f yyyy-MM-dd)_log$i.txt"
+    $OutPutFile =  "C:\Proact\Statusmail historik\2024\Netapp-$(get-date -f yyyy-MM-dd)_log$i.txt"
     $i++
 }
 
@@ -44,14 +44,14 @@ function Write-ToConsoleAndFile {
 }
 
 #Add cluster IP/DNS (DNS prefered,more readable output) that you want the script to check, add them in lines one line for each cluster.
-$Cluster_List = Get-Content "C:\***\clusterlist.txt"
+$Cluster_List = Get-Content "C:\Proact\clusterlist.txt"
 
 
 # Store the Entries into a variable
-$KpEntries = Get-KeePassEntry -KeePassEntryGroupPath 'Database' -DatabaseProfileName DATABASNAMNHÄR
+$KpEntries = Get-KeePassEntry -KeePassEntryGroupPath 'Database' -DatabaseProfileName Tranås
 
 # Define the entry titles from keepass for which you want to retrieve the passwords 
-$EntryTitles = @("DBKEEPASSNAMNHÄR", "DBKEEPASSNAMNHÄR", "DBKEEPASSNAMNHÄR")
+$EntryTitles = @("172.16.51.11", "172.16.51.21", "172.16.51.76", "172.16.51.12", "172.16.51.46")
 
 # Empty variable to hold the passwords
 $Passwords = @()
@@ -65,11 +65,12 @@ foreach ($EntryTitle in $EntryTitles) {
 
 # Create credentials for each password variable, if more entries/clusterpasswords exist in keepass just add on more rows 6,7,8 etc
 $Username = "admin"
+$Username1 = "support106"
 $Credential1 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Passwords[0]
 $Credential2 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Passwords[1]
 $Credential3 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Passwords[2]
-#$Credential4 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Passwords[3]
-#$Credential5 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Passwords[4]
+$Credential4 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username1, $Passwords[3]
+$Credential5 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username1, $Passwords[4]
 #$Credential6 = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Passwords[5]
 
 Set-ExecutionPolicy Unrestricted -force | Out-Null
@@ -79,17 +80,23 @@ ForEach ($Cluster in $Cluster_List) {
 
         $CredObject = $null
 
-        If ($Cluster -imatch "IPELLERCLUSTERNAMNHÄR") {
+        If ($Cluster -imatch "172.16.51.11") {
             $CredObject = $Credential1
         }
-        elseif ($Cluster -imatch "IPELLERCLUSTERNAMNHÄR") {
+        elseif ($Cluster -imatch "172.16.51.21") {
             $CredObject = $Credential2
         }
-        elseif ($Cluster -imatch "IPELLERCLUSTERNAMNHÄR") {
+        elseif ($Cluster -imatch "172.16.51.76") {
             $CredObject = $Credential3
         }
+        elseif ($Cluster -imatch "172.16.51.12") {
+            $CredObject = $Credential4
+        }
+        elseif ($Cluster -imatch "172.16.51.46") {
+            $CredObject = $Credential5
+        }
           #DEBUG LOGIN
-        <#// For trouble shooting cluster connection. Check if we have a valid credential object. If problem here 1.Check IP/cluster name. 2. Check Keepass for errors 3. Check overall syntax 4. Check if REST API works.
+        <#// For trouble shooting cluster connection. Check if we have a valid credential object. If problem here 1.Check IP/cluster name. 2. Check Keepass for errors 3. Check overall syntax of script in settings 4. Check if REST API has problems.
         #// If data is getting fetched as it should, then for now ignore any errors in the terminal.
         if ($CredObject) {
         Write-Host "Connecting to $Cluster with username: $($CredObject.UserName)"
@@ -104,7 +111,7 @@ ForEach ($Cluster in $Cluster_List) {
         return # Exit the script if no credentials were found for a cluster in the list
     }#>
 
-  Get today's date and version of ONTAP
+    # Get today's date and version of ONTAP
     $Date = Get-Date -format yyyy.MM.dd.hh.mm
     Write-ToConsoleAndFile -text "TimeStamp:",$Date -file $OutputFile
     Write-ToConsoleAndFile -text "============= Ontap System Info ==============" -file $OutputFile
@@ -232,9 +239,6 @@ ForEach ($Cluster in $Cluster_List) {
 
         $AggregateInfo += $AggregateObject
     }
-
-    # Convert to table format and output to console
-    $AggregateInfo | Format-Table -Property Node, Aggregate, TotalSize, Available, Used, Usedsize, Disks, Volumes, RaidType -AutoSize | Out-Host
 
     # Convert to table format, convert to string, and append to file
     $AggregateSummary = $AggregateInfo | Format-Table -Property Node, Aggregate, TotalSize, Available, Used, Usedsize, Disks, Volumes, RaidType -AutoSize | Out-String
@@ -382,53 +386,8 @@ ForEach ($Cluster in $Cluster_List) {
 
     # Output summary for memory FRU health
     Write-ToConsoleAndFile -text "$MemoryFruSummary`r`n" -file $OutputFile
-
-
-    Write-Host "============= Network health check ==============`r`n" # Sorting in categories make terminal easier to look at
-
-    # Get network status
-    $GetNetworkInfo = "https://$Cluster/api/private/cli/network/interface?fields=broadcast-domain,is-home,status-admin,status-oper,vserver,curr-node,curr-port,firewall-policy,ipspace,failover-policy,auto-revert,&pretty=false"
-    $NetworkStatus = Invoke-RestMethod $GetNetworkInfo -Credential $CredObject
-
-    # Initialize variable to track overall network health
-    $NetworkHealthOk = $true
-    $ProblemRecords = @()
-
-    # Go over each network record and check conditions
-    foreach ($Record in $NetworkStatus.records) {
-        Write-Host "Checking Network Interface: $($Record.curr_port) on Node: $($Record.curr_node)"
-
-        # Skip if vserver name contains "_DR" for example, use as work around or troubleshooting.
-        #if ($Record.vserver -like "*_DR*") {
-        #   Write-Host "Skipping DR vserver: $($Record.vserver)"
-        #  continue
-        #}
-
-        # Check conditions only if broadcast_domain is filled or null, this is to check if network is in use or not. Most likely used if broadcast domain is filled.
-        if ($Record.broadcast_domain) {
-            Write-Host "Checking Broadcast Domain: $($Record.broadcast_domain)"
-            if ($Record.status_oper -ne "up" -or $Record.is_home -ne $true -or $Record.status_admin -ne "up") {
-                Write-Host "Problem Detected: Admin Status: $($Record.status_admin), Operational Status: $($Record.status_oper), Is Home: $($Record.is_home)"
-                $NetworkHealthOk = $false
-                $ProblemRecords += $Record | ConvertTo-Json
-            }
-        } else {
-            Write-Host "Broadcast Domain not specified for Interface: $($Record.curr_port)"
-        }
-    }
-
-    # Summarize findings
-    if ($NetworkHealthOk) {
-        $NetworkSummary = "Network check OK"
-    } else {
-        $NetworkSummary = "Network issues detected:`n" + ($ProblemRecords -join "`n")
-    }
-
-    # Network Output
-    Write-ToConsoleAndFile -text "$NetworkSummary`r`n" -file $OutputFile
-
-
-        Write-Host "============= Subsystem health check ==============`r`n" #Sorting in categories make terminal easier to look at
+    
+         Write-Host "============= Subsystem health check ==============`r`n" #Sorting in categories make terminal easier to look at
 
     # Get subsystem overall health
     $GetSystem = "https://$Cluster/api/private/cli/system/health/subsystem?fields=health,subsystem,&pretty=false"
@@ -443,11 +402,11 @@ ForEach ($Cluster in $Cluster_List) {
         # Debug output before potentially skipping the record
         Write-Host "Evaluating subsystem: $($Record.subsystem) with health status: $($Record.health)"
 
-        # Skip specific subsystems based on name, use for trouble shooting or debug
-        #if ($Record.subsystem -like "*sas_connect*") {
-        #    Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
-        #    continue
-        #}
+        # Skip specific subsystems based on name, workaround for Tranås internal disk issue..
+        if ($Record.subsystem -like "*sas_connect*") {
+            Write-Host "Skip sas_connect due to DISK REDUNDANCY FAILED issue: $($Record.subsystem)"
+            continue
+        }
 
         if ($Record.health -ne "ok") {
             $SubsystemHealthOk = $false
@@ -462,17 +421,177 @@ ForEach ($Cluster in $Cluster_List) {
 
     # Summarize findings
     if ($SubsystemHealthOk) {
-        $SubsystemSummary = "Subsystem health check OK"
+        $SubsystemSummary = "Subsystem check OK"
     } else {
         $SubsystemSummary = "Subsystem health issues detected:`n" + ($HealthDiscrepancies -join "`n")
     }
 
         # Output summary for subsystem health
         Write-ToConsoleAndFile -text "$SubsystemSummary`r`n" -file $OutputFile
+    
+    Write-Host "============= Network port check ==============`r`n" # Sorting in categories make terminal easier to look at
+
+
+
+    # Define the fields to retrieve for each chassis
+    $PortFieldList = @(
+    "node",
+    "port",
+    "link",
+    "mtu",
+    "autonegotiate-admin",
+    "autonegotiate-oper",
+    "duplex-admin",
+    "duplex-oper",
+    "speed-admin",
+    "speed-oper",
+    "flowcontrol-admin",
+    "flowcontrol-oper",
+    "mac",
+    "type",
+    "ifgrp-node",
+    "ifgrp-port",
+    "ifgrp-distr-func",
+    "ifgrp-mode",
+    "vlan-node",
+    "vlan-port",
+    "vlan-tag",
+    "remote-device-id",
+    "ipspace",
+    "broadcast-domain",
+    "mtu-admin",
+    "health-status",
+    "ignore-health-status",
+    "health-degraded-reasons",
+    "vm-network-name",
+    "rdma-protocols"
+    )
+
+    # Convert the field list to a comma-separated string for the API request
+    $GetPortInfoString = $PortFieldList -join ","
+
+    # Get Port status
+    $GetPortInfoUrl = "https://$Cluster/api/private/cli/network/port?fields=$GetPortInfoString,&pretty=false"
+    $PortStatus = Invoke-RestMethod $GetPortInfoUrl -Credential $CredObject
+
+    # Initialize variable to track overall port health
+    $PortHealthOk = $true
+    $PortProblemRecords = @()
+
+    # Go over each port record and check conditions
+    foreach ($PortRecord in $PortStatus.records) {
+        Write-Host "Checking Port: $($PortRecord.port) on Node: $($PortRecord.node)"
+
+        if ($PortRecord.link -eq "down" -and [string]::IsNullOrEmpty($PortRecord.broadcast_domain)) {
+            Write-Host "Port Link is Down but Broadcast Domain is Empty, Ignoring"
+            continue
+        }
+
+        if ($PortRecord.link -eq "up" -and $PortRecord.health_status -eq "healthy") {
+            Write-Host "Port Link is Up and ports are healthy"
+        } else {
+            Write-Host "Issue Detected: Port Link is Down or Health Status is not healthy on Port: $($PortRecord.port)"
+            # Add the full JSON representation of the problematic port record
+            $PortProblemRecords += $PortRecord | ConvertTo-Json
+            $PortHealthOk = $false
+        }
+    }
+
+    # Summarize findings
+    if ($PortHealthOk) {
+        $PortSummary = "Port check OK."
+    } else {
+        $PortSummary = "Port issues detected:`n" + ($PortProblemRecords -join "`n")
+    }
+
+    # Port Output
+    Write-ToConsoleAndFile -text "$PortSummary`r`n" -file $OutputFile
+
+
+    Write-Host "============= Network interface check ==============`r`n" # Sorting in categories make terminal easier to look at
+
+
+    # Get network status
+    $GetNetworkInfo = "https://$Cluster/api/private/cli/network/interface?fields=broadcast-domain,is-home,status-admin,status-oper,vserver,curr-node,curr-port,firewall-policy,ipspace,failover-policy,auto-revert,&pretty=false"
+    $NetworkStatus = Invoke-RestMethod $GetNetworkInfo -Credential $CredObject
+
+    # Initialize variable to track overall network health
+    $NetworkHealthOk = $true
+    $ProblemRecords = @()
+
+    # Define nodes to ignore when status_oper is 'down'
+    $IgnoreNodes = @(
+        "nmc1-01",
+        "nmc1-02",
+        "nmc2-01",
+        "nmc2-02"
+    )
+
+    # Go over each network record and check conditions
+    foreach ($Record in $NetworkStatus.records) {
+        Write-Host "Checking Network Interface: $($Record.curr_port) on Node: $($Record.curr_node)"
+
+        # Check if the node is in the ignore list and the operational status is 'down'
+        if ($IgnoreNodes -contains $Record.curr_node -and $Record.status_oper -eq "down") {
+            # Additional check for admin status when node is on ignore list
+            if ($Record.status_admin -ne "up") {
+                Write-Host "Node $($Record.curr_node) with port $($Record.curr_port) is down with Status_Admin also down. Reporting..."
+                $ProblemRecords += $Record | ConvertTo-Json
+                $NetworkHealthOk = $false
+                continue
+            } else {
+                Write-Host "Node $($Record.curr_node) with port $($Record.curr_port) is in the ignore list with status down but Admin_Status up. Skipping..."
+                continue
+            }
+        }
+
+        # Check conditions only if broadcast_domain value is not empty, if empty ignore
+        if ($Record.broadcast_domain) {
+            Write-Host "Checking Broadcast Domain: $($Record.broadcast_domain)"
+            if ($Record.status_oper -ne "up" -or $Record.is_home -ne $true -or $Record.status_admin -ne "up") {
+                $AdditionalCheck = $true
+                if ($Record.vserver) {
+                    # Get Vserver info about the operational status and subtype of SVM
+                    $GetVserverInfo = "https://$Cluster/api/private/cli/vserver?fields=vserver,operational-state-stopped-reason,comment,&pretty=false"
+                    $VserverInfoStatus = Invoke-RestMethod $GetVserverInfo -Credential $CredObject
+            
+                    foreach ($VserverRecord in $VserverInfoStatus.records) {
+                        if ($VserverRecord.vserver -eq $Record.vserver) {
+                            # Check if the operational_state_stopped_reason is "dp_destination_not_started" or empty
+                            if ($VserverRecord.operational_state_stopped_reason -eq "dp_destination_not_started" -or $VserverRecord.comment -eq "DR") {
+                                $AdditionalCheck = $false
+                                Write-Host "Skipping due to DR state for Vserver: $($VserverRecord.vserver)"
+                                break
+                            }
+                        }
+                    }
+                }
+        
+                # If the additional check passes, proceed with reporting the problem
+                if ($AdditionalCheck) {
+                    Write-Host "Problem Detected: Admin Status: $($Record.status_admin), Operational Status: $($Record.status_oper), Is Home: $($Record.is_home)"
+                    $NetworkHealthOk = $false
+                    $ProblemRecords += $Record | ConvertTo-Json
+                }
+            }
+        } else {
+            Write-Host "Broadcast Domain not specified for Interface: $($Record.curr_port)"
+        }
+    }
+
+    # Summarize findings
+    if ($NetworkHealthOk) {
+        $NetworkSummary = "Network Interface check OK"
+    } else {
+        $NetworkSummary = "Network Interface issues detected:`n" + ($ProblemRecords -join "`n")
+    }
+
+    # Network Output
+    Write-ToConsoleAndFile -text "$NetworkSummary`r`n" -file $OutputFile
 
     Write-ToConsoleAndFile -text "============= Volumes Above 80% ==============`r`n" -file $OutputFile
 
-    $GetVolumes = "https://$Cluster/api/private/cli/volume?fields=vserver,volume,aggregate,available,total,percent-used,autosize-mode,autosize-grow-threshold-percent,autosize-shrink-threshold-percent,&pretty=false"
+    $GetVolumes = "https://$Cluster/api/private/cli/volume?fields=node,vserver,volume,aggregate,available,total,percent-used,autosize-mode,autosize-grow-threshold-percent,autosize-shrink-threshold-percent,&pretty=false"
     $VolumeTable = Invoke-RestMethod $GetVolumes -Credential $CredObject
 
     $FilteredVolumes = $VolumeTable.records | Where-Object {
@@ -528,23 +647,9 @@ ForEach ($Cluster in $Cluster_List) {
         $ShrinkThreshold = $Volume.'autosize_shrink_threshold_percent'
         $Dedupe = if ($Volume.'anti_ransomware_state' -eq 'enabled') { 'True' } else { 'False' }
 
-        #Code to autoraise volumes on X amount, this is work in progress
-        <# Calculate increase amount based on current total size (example: 10% increase)
-        $IncreaseAmount = $Volume.total * 0.1
-
-        # Prompt user for decision
-        $UserDecision = Read-Host "Volume $($Volume.volume) is above 88% used. Do you want to increase its size by $($IncreaseAmount) (yes/no)?"
-    
-        if ($UserDecision -eq 'yes') {
-            # Placeholder for the code to actually increase the volume size
-            Write-Host "Increasing volume $($Volume.volume) size by $($IncreaseAmount)."
-            # Add your code here to perform the increase operation
-        } else {
-            Write-Host "No action taken for volume $($Volume.volume)."
-        }#>
-
         # Create a custom object for each volume
         $VolumeObject = [PSCustomObject]@{
+            Node = $Volume.node
             Volume = $Volume.volume
             Total = $TotalSize
             Used = $UsedPercent
@@ -558,28 +663,42 @@ ForEach ($Cluster in $Cluster_List) {
         $VolumeInfo += $VolumeObject
     }
         # Output formatted records
-        $VolumeInfo | Format-Table -Property Volume, Total, Used, Available, Dedupe, Vserver, Autogrowstatus -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
+        $VolumeInfo | Format-Table -Property Node, Volume, Total, Used, Available, Dedupe, Vserver, Autogrowstatus -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
     }
 
-    # Checking for inodes above 78% Ontap starts giving warnings at about 80%
-    Write-ToConsoleAndFile -text "============= Inodes/files Above 78% ==============`r`n" -file $OutputFile
-    $GetVolumes = "https://$Cluster/api/private/cli/volume?fields=vserver,volume,files,files-used,&pretty=false"
+    # Checking for inodes above 90% Ontap starts giving warnings at about 80% if the volume is needing to be raised.
+    #SnapMirror Type-XDP destination volumes will increase their inode count when the SnapMirror source volume iused value is is greater than 90% of the destination volume's max inode count​​
+    #The inode count will remain unchanged if the iused value of the source volume is not greater than approximately 90% of the max inode count of the destination volume
+    # setting this to only report if above 90%, but if EMS messages being generated, it also should be looked at, could be a settings is missing on that volume so it does not autoraise at all.
+
+    Write-ToConsoleAndFile -text "============= Inodes/files Above 90% ==============`r`n" -file $OutputFile
+    $GetVolumes = "https://$Cluster/api/private/cli/volume?fields=node,vserver,volume,files,files-used,&pretty=false"
     $VolumeTable = Invoke-RestMethod $GetVolumes -Credential $CredObject
 
     $FilteredFilesVolumes = $VolumeTable.records | Where-Object {
         $FilesMax = $_.files
         $FilesUsed = $_.'files_used'
-        $FilesUsedPercent = ($FilesUsed / $FilesMax) * 100
+    
+        # Debug output
+        Write-Host "FilesMax: $FilesMax, FilesUsed: $FilesUsed"
+    
+        # Check if $FilesMax is not empty and not zero to avoid division by zero error
+        if ([string]::IsNullOrEmpty($FilesMax) -eq $false -and $FilesMax -ne 0) {
+            $FilesUsedPercent = ($FilesUsed / $FilesMax) * 100
 
-        $FilesUsageAboveThreshold = $FilesUsedPercent -gt 78
-        return $FilesUsageAboveThreshold
+            # Percent value to check for files above X value
+            $FilesUsageAboveThreshold = $FilesUsedPercent -gt 90
+            return $FilesUsageAboveThreshold
+        }
+        else {
+            return $false  # Skip volumes where $FilesMax is empty or zero
+        }
     }
 
     if ($FilteredFilesVolumes.Count -eq 0) {
-        Write-ToConsoleAndFile -text "No volumes are above 78% file usage`r`n 
-        "-file $OutputFile
+        Write-ToConsoleAndFile -text "No volumes are above 90% file usage`r`n" -file $OutputFile
     } else {
-        Write-ToConsoleAndFile -text "Volumes above 78% file usage, correction is needed `r`n" -file $OutputFile
+        Write-ToConsoleAndFile -text "Volumes above 90% file usage, correction is needed `r`n" -file $OutputFile
 
         $FileUsageInfo = @()
 
@@ -591,7 +710,7 @@ ForEach ($Cluster in $Cluster_List) {
                 Volume = $Volume.volume
                 FilesMax = $Volume.files
                 FilesUsed = $Volume.'files_used'
-                FilesUsedPercent = $FilesUsedPercentFormatted
+                UsedPercent = $FilesUsedPercentFormatted
                 Vserver = $Volume.vserver
                 Node = $Volume.node
             }
@@ -600,8 +719,9 @@ ForEach ($Cluster in $Cluster_List) {
         }
 
         # Output formatted records for inodes
-        $FileUsageInfo | Format-Table -Property node, Volume, FilesMax, FilesUsed, FilesUsedPercent, Vserver -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
+        $FileUsageInfo | Format-Table -Property Node, Volume, UsedPercent, FilesUsed, FilesMax,  Vserver -AutoSize | Out-String | ForEach-Object { Write-ToConsoleAndFile -text $_ -file $OutputFile }
     }
+
 
     # Checking for SnapMirror problems
     Write-ToConsoleAndFile -text "============= Snapmirror lagtime & problems ==============`r`n" -file $OutputFile
@@ -636,7 +756,8 @@ ForEach ($Cluster in $Cluster_List) {
         "break-successful-count",
         "break-failed-count",
         "total-transfer-bytes",
-        "total-transfer-time-secs"
+        "total-transfer-time-secs",
+        "unhealthy-reason"
     )
 
     $SnapQueryString = $SnapMirrorFields -join ","
@@ -680,6 +801,7 @@ ForEach ($Cluster in $Cluster_List) {
                     Status = $SnapmirrorEntry.status
                     Healthy = $SnapmirrorEntry.healthy
                     DestinationVolumeNode = $SnapmirrorEntry.destination_volume_node
+                    UnhealthyReason = $($SnapMirrorEntry.unhealthy_reason)
                 }
 
                 # Formatted log entry string
@@ -694,6 +816,7 @@ ForEach ($Cluster in $Cluster_List) {
                     State = $($SnapEntry.State)
                     Status = $($SnapEntry.Status)
                     DestinationVolumeNode = $($SnapEntry.DestinationVolumeNode)
+                    UnhealthyReason = $($SnapEntry.UnhealthyReason)
                 }
 
               # Outputting the formatted string
@@ -708,7 +831,7 @@ ForEach ($Cluster in $Cluster_List) {
     }
     # Output fetched SnapMirror data count
     Write-Host "Fetched SnapMirror Data: $($SnapmirrorData.records.Count) entries"
-    Write-ToConsoleAndFile -text "SnapMirror Health check OK.`r`n" -file $OutPutFile
+    Write-ToConsoleAndFile -text "No snapMirror problems found.`r`n" -file $OutPutFile
 
    # Snapshot check problems
     Write-ToConsoleAndFile -text "============= Snapshot problems ==============`r`n" -file $OutPutFile
@@ -789,7 +912,7 @@ ForEach ($Cluster in $Cluster_List) {
         Write-ToConsoleAndFile -text "No Snapshot problems found.`r`n" -file $OutputFile
     } else {
         # Output JSON result and the count of matching snapshots
-        Write-ToConsoleAndFile -text "Filtered Snapshots JSON:`r`n$SnapshotsJson`r`nTotal Filtered Snapshots Count: $SnapshotsMatchCount" -file $OutputFile
+        Write-ToConsoleAndFile -text "Snapshot above 30 days:`r`n$SnapshotsJson `r`nFound Snapshots Count:$SnapshotsMatchCount`r`n"-file $OutputFile
     }
 
 
@@ -813,7 +936,7 @@ ForEach ($Cluster in $Cluster_List) {
     4. Respond to the attack accordingly. Check documentation for more information.
 
     https://docs.netapp.com/us-en/ontap/anti-ransomware/recover-data-task.html
-    https://kb.netapp.com/onprem/ontap/da/NAS/Understanding_ARP_snapshot_protection_and_attack_detection"
+    https://kb.netapp.com/onprem/ontap/da/NAS/Understanding_ARP_snapshot_protection_and_attack_detection`r`n"
     )
 
 
@@ -849,13 +972,13 @@ ForEach ($Cluster in $Cluster_List) {
 
         # If all records are OK (no notable 'attack_probability'), log a confirmation message
         if ($AllRecordsAreOK) {
-            Write-ToConsoleAndFile -text "Everything OK`r`n" -file $OutputFile
+            Write-ToConsoleAndFile -text "No highlevel ransomware warnings found`r`n" -file $OutputFile
         }
 
 
     # Checking for relevant EMS messages
     Write-ToConsoleAndFile -text "============= !!! Important EMS warning messages to txt log !!! ==============`r`n " -file $OutPutFile
-    Write-ToConsoleAndFile -text "See console for more good-to-know EMS messages (Also only the last 48 hours gets printed)`r`n " -file $OutPutFile
+    Write-ToConsoleAndFile -text "See powershell console-window for more good-to-know EMS messages (Only the last 48 hours gets printed)`r`n " -file $OutPutFile
 
 
     # Define function to check if a record's timestamp is within the specified time frame
@@ -1001,16 +1124,6 @@ ForEach ($Cluster in $Cluster_List) {
     # Combine all formatted records into a single string for output
     $RecordsSummary = $FormattedOutput -join "`r`n"
 
-    # Custom function to write to both console and file
-    function Write-ToConsoleAndFile {
-        param (
-            [string]$text,
-            [string]$file
-        )
-        Write-Host $text
-        $text | Out-File -FilePath $file -Append
-    }
-
     # Output the combined formatted string to the console and to the file
     Write-ToConsoleAndFile -text $RecordsSummary -file $OutPutFile
 
@@ -1029,7 +1142,6 @@ ForEach ($Cluster in $Cluster_List) {
 
 }
 
-#//Clears all variables before ending script, shutting down powershell will also clear memory
+#//Clears all variables before ending script, shutting down powershell will  also clear memory
 Get-Variable | Where-Object { $_.Name -ne '^' } | Remove-Variable -ErrorAction SilentlyContinue -Force
-
 
